@@ -110,7 +110,7 @@ def load_models():
         st.stop()
 
     llm = ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash-exp",
+        model="gemini-2.5-flash-lite",
         google_api_key=api_key,
         temperature=0
     )
