@@ -8,6 +8,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmb
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 import os
+import sqlite3
 
 # ==================== CONFIGURATION ====================
 st.set_page_config(
@@ -20,7 +21,7 @@ st.set_page_config(
 # Static file paths
 FAISS_FILE = "apmsmeone.ap.gov.in_2026-01-22_08-44-04/Citta_Index_apmsmeone.faiss"
 IDS_FILE = "apmsmeone.ap.gov.in_2026-01-22_08-44-04/Citta_Index_apmsmeone_ids.json"
-CHUNKS_FILE = "apmsmeone.ap.gov.in_2026-01-22_08-44-04/Citta_Chunks_apmsmeone.json"
+CHUNKS_FILE = "apmsmeone.ap.gov.in_2026-01-22_08-44-04/chunks.db"
 
 
 # ==================== CONVERSATION MANAGER ====================
@@ -124,24 +125,16 @@ def load_models():
 
 
 @st.cache_resource
-def load_index_and_chunks():
-    """Load FAISS index1 and chunks (cached)"""
+def load_index_and_ids():
     try:
-        # Load FAISS index1
         index = faiss.read_index(FAISS_FILE)
 
-        # Load chunk IDs
         with open(IDS_FILE, "r") as f:
             chunk_ids = json.load(f)
 
-        # Load chunks data
-        with open(CHUNKS_FILE, "r") as f:
-            chunks = json.load(f)
-
-        return index, chunk_ids, chunks
+        return index, chunk_ids
     except FileNotFoundError as e:
         st.error(f"❌ File not found: {e.filename}")
-        st.info("Please ensure these files exist:\n- index1.faiss\n- index_ids.json\n- index_chunks.json")
         st.stop()
     except Exception as e:
         st.error(f"❌ Error loading files: {str(e)}")
@@ -153,9 +146,34 @@ def get_conversation_manager():
     """Get conversation manager (singleton)"""
     return ConversationManager()
 
+@st.cache_resource
+def load_chunk_db():
+    conn = sqlite3.connect(CHUNKS_FILE, check_same_thread=False)
+    return conn
+
+def fetch_chunk(chunk_id: str, conn):
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT title, summary, propositions, canonical_text
+        FROM chunks WHERE chunk_id=?
+    """, (chunk_id,))
+
+    row = cur.fetchone()
+    if not row:
+        return None
+
+    title, summary, propositions, canonical_text = row
+
+    return {
+        "title": title,
+        "summary": summary,
+        "propositions": json.loads(propositions),
+        "canonical_text": canonical_text
+    }
+
 
 # ==================== RETRIEVAL FUNCTION ====================
-def retrieve_documents(query: str, embedder, index, chunk_ids, chunks, k=3):
+def retrieve_documents(query, embedder, index, chunk_ids, chunk_db, k=3):
     """Retrieve relevant documents"""
     # Embed query
     query_embedding = embedder.embed_query(query)
@@ -170,7 +188,9 @@ def retrieve_documents(query: str, embedder, index, chunk_ids, chunks, k=3):
     for idx, i in enumerate(ids[0]):
         if i != -1 and i < len(chunk_ids):
             chunk_id = chunk_ids[i]
-            chunk = chunks[chunk_id]
+            chunk = fetch_chunk(chunk_id, chunk_db)
+            if not chunk:
+                continue
             results.append({
                 "chunk_id": chunk_id,
                 "score": float(scores[0][idx]),
@@ -213,7 +233,8 @@ def generate_answer(query: str, context: str, retrieved_docs, llm):
 
 # ==================== LOAD ALL COMPONENTS ====================
 llm, embedder = load_models()
-index, chunk_ids, chunks = load_index_and_chunks()
+index, chunk_ids = load_index_and_ids()
+chunk_db = load_chunk_db()
 conv_manager = get_conversation_manager()
 
 # ==================== SESSION STATE ====================
@@ -245,7 +266,7 @@ with st.sidebar:
 
     # Knowledge Base Status
     st.subheader("📁 Knowledge Base")
-    st.success(f"✅ {len(chunks)} chunks loaded")
+    st.success(f"✅ {len(chunk_ids)} chunks loaded")
     st.info(f"📊 {index.ntotal} vectors indexed")
 
     st.markdown("---")
@@ -302,7 +323,9 @@ if prompt := st.chat_input("Ask me anything..."):
                 context = conv_manager.get_context(st.session_state.session_id)
 
                 # Retrieve documents
-                retrieved_docs = retrieve_documents(prompt, embedder, index, chunk_ids, chunks)
+                retrieved_docs = retrieve_documents(
+                    prompt, embedder, index, chunk_ids, chunk_db
+                )
 
                 # Generate answer
                 answer = generate_answer(prompt, context, retrieved_docs, llm)
