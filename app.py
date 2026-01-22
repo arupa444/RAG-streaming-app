@@ -18,9 +18,9 @@ st.set_page_config(
 )
 
 # Static file paths
-FAISS_FILE = "index/MSME_Handbook_FAISS.faiss"
-IDS_FILE = "index/MSME_Handbook_ids.json"
-CHUNKS_FILE = "index/MSME_Handbook_Chunks.json"
+FAISS_FILE = "apmsmeone.ap.gov.in_2026-01-22_08-44-04/Citta_Index_apmsmeone.faiss"
+IDS_FILE = "apmsmeone.ap.gov.in_2026-01-22_08-44-04/Citta_Index_apmsmeone_ids.json"
+CHUNKS_FILE = "apmsmeone.ap.gov.in_2026-01-22_08-44-04/Citta_Chunks_apmsmeone.json"
 
 
 # ==================== CONVERSATION MANAGER ====================
@@ -125,9 +125,9 @@ def load_models():
 
 @st.cache_resource
 def load_index_and_chunks():
-    """Load FAISS index and chunks (cached)"""
+    """Load FAISS index1 and chunks (cached)"""
     try:
-        # Load FAISS index
+        # Load FAISS index1
         index = faiss.read_index(FAISS_FILE)
 
         # Load chunk IDs
@@ -141,7 +141,7 @@ def load_index_and_chunks():
         return index, chunk_ids, chunks
     except FileNotFoundError as e:
         st.error(f"❌ File not found: {e.filename}")
-        st.info("Please ensure these files exist:\n- index.faiss\n- index_ids.json\n- index_chunks.json")
+        st.info("Please ensure these files exist:\n- index1.faiss\n- index_ids.json\n- index_chunks.json")
         st.stop()
     except Exception as e:
         st.error(f"❌ Error loading files: {str(e)}")
