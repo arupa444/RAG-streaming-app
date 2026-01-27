@@ -1,5 +1,5 @@
-streamlit
-faiss-cpu
-langchain-google-genai
-langchain-core
-numpy
+streamlit==1.53.1
+faiss-cpu==1.13.2
+langchain-google-genai==4.2.0
+langchain-core==1.2.7
+numpy==2.4.1
